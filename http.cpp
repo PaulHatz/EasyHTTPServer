@@ -1,25 +1,8 @@
 #include "main.h"
-
-//Count number of bytes until a character starting at buffer
-size_t countBytesUntil(char *buffer, char c)
-{
-	size_t len = strlen(buffer);
-	size_t sz = 0;
-
-	while (sz < len) {
-		if (buffer[sz] == 0x0D)
-			break;
-
-		if (buffer[sz] == c)
-			return sz;
-
-		sz++;
-	}
-	return 0;
-}
+#include "FileType.h"
 
 //Use file name to get extension. Will return 0 if file has no extension or given path ends with a directory.
-char *getFileExtensionWithName(char *fileName)
+const char *getFileExtensionWithName(const char *fileName)
 {
 	size_t off = strlen(fileName) - 1;
 
@@ -40,36 +23,27 @@ char *getFileExtensionWithName(char *fileName)
 	return nullptr;
 }
 
-//Convert path from GET request to Windows.
-void cleanPath(char *path)
+
+
+std::vector<std::string_view> SplitHeaders(std::string_view headers)
 {
-	char val[3] = { 0 };
-	char c = 0;
+    std::vector<std::string_view> lines;
 
-	size_t len = strlen(path) + 1; //include null char
+    while (!headers.empty())
+    {
+        size_t pos = headers.find("\r\n");
 
-	switch (*path) {
+        if (pos == std::string_view::npos)
+        {
+            lines.push_back(headers);
+            break;
+        }
 
-	case '/':
-		*path = '\\'; //Replace '/' with '\'
-		cleanPath((char *)(int(path) + 1));
-		break;
+        lines.push_back(headers.substr(0, pos));
+        headers.remove_prefix(pos + 2);
+    }
 
-	case '%':
-		memcpy(val, (void *)(int(path) + 1), 2); //Copy hex into sperate buffer
-		c = (char)strtol(val, NULL, 16); //Convert hex into character
-		*path = c; //Replace the % symbol with the character
-
-		memcpy((void *)(int(path) + 1), (void *)(int(path) + 3), len - 2);  //Move bytes from after the hex characters 2 spaces back.
-
-		cleanPath((char *)(int(path) + 1));
-		break;
-
-	case 0: break; //Terminate if null byte
-	default:
-		cleanPath((char *)(int(path) + 1));
-		break;
-	}
+    return lines;
 }
 
 //Send header of response.
@@ -99,141 +73,57 @@ size_t HTTP_SendHeader(SOCKET sock, int response_code, const char *ContentType, 
 	return sz;
 }
 
-//Process request.
-void HTTP_ProcessRequest(SOCKET sock, char *buffer, size_t sz)
+void HTTP_ProcessRequest(SOCKET sock, char * buffer, size_t sz)
 {
-	char *str = strstr(buffer, "GET /"); //Find GET request
+	auto headers = SplitHeaders(buffer);
+	auto request = std::string_view(headers.at(0));
 
-	if (str) {
-		size_t filenameLength = countBytesUntil(&str[4], ' ');
-		size_t brkFound = countBytesUntil(&str[4], '?');
+	size_t firstSpace = request.find(' ');
+	if (firstSpace == std::string_view::npos)
+    	return;
 
-		if (brkFound)
-			filenameLength = brkFound;
+	size_t secondSpace = request.find(' ', firstSpace + 1);
+	if (secondSpace == std::string_view::npos)
+    	return;
 
+	std::string_view method = request.substr(0, firstSpace);
 
-		//If the last character in the get request is a '/', then the user is accessing a directory
-		//We must therfore load the index page.
-		bool dirRequested = false;
-		if (str[4 + filenameLength - 1] == '/') {
-			filenameLength += strlen("index.html");
-			dirRequested = true;
-		}
+	std::string_view path =
+		request.substr(firstSpace + 1,
+					secondSpace - firstSpace - 1);
 
-		char *requestedFile = new char[filenameLength + 1]();
-		memcpy(requestedFile, &str[4], dirRequested ? filenameLength - strlen("index.html") : filenameLength); //Start reading at the /
+	std::string_view version =
+		request.substr(secondSpace + 1);
 
-		if (dirRequested) {
-			const char *index = "index.html";
-			memcpy(&requestedFile[filenameLength - strlen(index)], index, strlen(index));
-		}
+	auto requested_file = "html/" + std::string(path);
 
-		char *extension = getFileExtensionWithName(requestedFile);
+	if (path.at(path.length() - 1) == '/') {
+		requested_file += "index.html";
+	}
 
-		//Convert directory into Windows path
-		cleanPath(requestedFile);
+	if (std::filesystem::exists(requested_file)) {
+		auto extension = getFileExtensionWithName(requested_file.c_str());
+		auto file_contents = readFile(requested_file);
+		auto fileSize =file_contents.length();
+		if(fileSize > 0) {
+			auto mime_type = GetMimeType(extension);
 
-		wchar_t *convertedPath = new wchar_t[strlen(requestedFile) + 1];
-		ZeroMemory(convertedPath, 2 * (strlen(requestedFile) + 1));
-
-		std::mbstowcs(convertedPath, requestedFile, strlen(requestedFile));
-
-		char *fileBuffer = nullptr;
-		size_t fileSize = 0;
-
-		TCHAR NPath[MAX_PATH];
-		GetCurrentDirectory(MAX_PATH, NPath);
-		std::wstring filePath = NPath + std::wstring(HTML_ROOT_PATH) + convertedPath;
-		bool bHeaderSent = false;
-		
-		//Read file once path is converted
-		readFile(filePath.c_str(), &fileBuffer, &fileSize);
-
-		//If the file exists, fileBuffer will be populated
-		if (fileBuffer) {
-
-			if (extension) {
-				if (!strcmp(extension, ".html")) {
-
-					HTTP_SendHeader(sock, 200, "text/html", fileSize + 2);
-					bHeaderSent = true;
-				}
-				else if (!strcmp(extension, ".js")) {
-					HTTP_SendHeader(sock, 200, "text/javascript", fileSize + 2);
-					bHeaderSent = true;
-				}
-				else if (!strcmp(extension, ".css")) {
-					HTTP_SendHeader(sock, 200, "text/css", fileSize + 2);
-					bHeaderSent = true;
-				}
-				else if (!strcmp(extension, ".png")) {
-					HTTP_SendHeader(sock, 200, "image/png", fileSize + 2);
-					bHeaderSent = true;
-				}
-				else if (!strcmp(extension, ".jpeg") || !strcmp(extension, ".jpg")) {
-					HTTP_SendHeader(sock, 200, "image/jpeg", fileSize + 2);
-					bHeaderSent = true;
-				}
-				else if (!strcmp(extension, ".pdf")) {
-					HTTP_SendHeader(sock, 200, "application/pdf", fileSize + 2);
-					bHeaderSent = true;
-				}
-				else if (!strcmp(extension, ".txt")) {
-					HTTP_SendHeader(sock, 200, "text/plain", fileSize + 2);
-					bHeaderSent = true;
-				}
-				else {
-					HTTP_SendHeader(sock, 200, "text/plain", fileSize + 2);
-					bHeaderSent = true;
-				}
-			}
-			else {
-				//Handle no-extension files
-				HTTP_SendHeader(sock, 200, "text/plain", fileSize + 2);
-				bHeaderSent = true;
-			}
-
-			if (bHeaderSent) {
-				char end[] = { 0x0D, 0x0A };
-
-				send(sock, fileBuffer, fileSize, 0);
-				send(sock, end, 2, 0);
-			}
-
-			delete[] fileBuffer;
-		}
-
-		else {
-			//If fileBuffer is null, the page was not found
-			HTTP_SendHeader(sock, 404, "text/html", 0); //Error 404
-			//Normally, a server would give an 404 page
-
-
-			/*
-			* 
-			* For custom commands, we can use a non-existant file with parameters
+			HTTP_SendHeader(sock, 200, mime_type, fileSize + 2);
 			
-			if(!strcmp(requestedFile, "main.cmd") {
+			char end[] = { 0x0D, 0x0A };
+			send(sock, file_contents.c_str(), fileSize, 0);
+			send(sock, end, 2, 0);
+			std::cout << "Hello noG" << std::endl;
 
-				size_t paramLen = countBytesUntil(&str[4 + brkFound], ' ');
-
-				char *parameters = new char[paramLen - brkFound];
-				memcpy(parameters, &str[4 + brkFound], paramLen);
-
-				
-
-				delete[] parameters;
-			}
-			*/
-
-
-		}
-		delete[] requestedFile;
-
+		} 
+	}
+	else { 
+		HTTP_SendHeader(sock, 404, "text/html", 0);
+		std::cout << "Hello GGG" << std::endl;
 	}
 }
 
-void HTTP_SocketThread(SOCKET *sockPtr)
+void HTTP_SocketThread(std::stop_token stop_tok, int *sockPtr)
 {
 	SOCKET sock = *sockPtr;
 
@@ -244,7 +134,7 @@ void HTTP_SocketThread(SOCKET *sockPtr)
 	if (sz <= 512)
 		HTTP_ProcessRequest(sock, buffer, sz);
 
-	Sleep(1);
+	std::this_thread::sleep_for(1ms);
 
 	closesocket(sock);
 

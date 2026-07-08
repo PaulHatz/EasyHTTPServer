@@ -15,28 +15,15 @@ size_t getFileSize(FILE *FileHandle)
 	return FileSize;
 }
 
-
-void readFile(const wchar_t *filePath, char **fileBuffer, size_t *fSize)
+std::string readFile(const std::filesystem::path& file_path) 
 {
-	FILE *fHandle = _wfopen(filePath, L"rb");
+    std::ifstream file_stream(file_path);
+    
+    if (!file_stream.is_open()) {
+        throw std::runtime_error("Failed to open file: " + file_path.string());
+    }
 
-	if (fHandle) {
-		int err = fseek(fHandle, 0, SEEK_SET);
-
-		if (!err) {
-			*fSize = getFileSize(fHandle);
-
-			if (fSize > 0) {
-				*fileBuffer = new char[*fSize]();
-				size_t LengthRead = fread(*fileBuffer, sizeof(char), *fSize, fHandle);
-				
-				err = ferror(fHandle);
-				if (err) printf("Error at fread()\n");
-			}
-			else printf("Error at fileSize");
-		}
-		else printf("Error at fseek()\n");
-
-		fclose(fHandle);
-	}
+    std::ostringstream buffer;
+    buffer << file_stream.rdbuf(); // Read the file buffer directly into the string stream
+    return buffer.str();
 }

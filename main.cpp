@@ -5,6 +5,7 @@ SOCKET SRV_sock = 0;
 
 int initializeWinSock()
 {
+	#ifdef PLATFORM_WINDOWS
 	WSADATA wsaData;
 
 	int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -13,7 +14,8 @@ int initializeWinSock()
 		printf("WSAStartup failed with error: %d\n", iResult);
 		return 1;
 	}
-
+	#endif
+	return 0;
 }
 
 bool initializeListener(int maxConnections)
@@ -23,7 +25,7 @@ bool initializeListener(int maxConnections)
 	sockaddr_in addr = { 0 };
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(SRV_PORT);
-	addr.sin_addr.S_un.S_addr = htonl(INADDR_ANY);
+	addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	unsigned long iMode = 1;
 
@@ -45,10 +47,8 @@ int main()
 	if (initializeWinSock())
 		return 1;
 
-	printf("WinSock Initialized!\n");
-
 	sockaddr_in addr = { 0 };
-	int sz = sizeof(addr);
+	socklen_t sz = sizeof(addr);
 
 	//Initialize listener
 	if (initializeListener(20)) {
@@ -57,17 +57,15 @@ int main()
 		printf("Open your browser to localhost:%ld\n", SRV_PORT);
 
 		while (!bExit) {
-			Sleep(1);
+			std::this_thread::sleep_for(1ms);
 
 			SOCKET newSocket = accept(SRV_sock, (sockaddr *)&addr, &sz);
 			if (newSocket) {
 				if (newSocket == SOCKET_ERROR)
 					continue;
+ 
 
-				//Create thread every time there is a new connection
-
-				DWORD ThreadID = 0;
-				CreateThread(0, 0, (LPTHREAD_START_ROUTINE)HTTP_SocketThread, &newSocket, 0, &ThreadID);
+				std::jthread socket_thread(HTTP_SocketThread, (int*)&newSocket);
 			}
 		}
 	}
