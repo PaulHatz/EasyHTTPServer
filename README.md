@@ -22,13 +22,6 @@ Place the files you want to serve inside the html/ directory.
 
 Example:
 
-html/ 
-├── index.html 
-├── styles.css 
-├── script.js 
-└── images/ 
-    └── logo.png
-
 Start the server and open the following address in a browser: http://localhost
 
 A request for: 
