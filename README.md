@@ -40,17 +40,17 @@ A request for:
 will serve: html/images/logo.png
 
 ## Current Limitations
-The current implementation:
-Supports only GET requests
-Does not support HTTPS or TLS
-Does not support request bodies
-Does not support chunked transfer encoding
-Does not support persistent connections
-Does not fully validate all HTTP headers
-Loads an entire requested file into memory before sending it
-Does not currently implement caching or range requests
-Has not been hardened against every malformed or malicious request
-Is not intended for production hosting
+- The current implementation:
+- Supports only GET requests
+- Does not support HTTPS or TLS
+- Does not support request bodies
+- Does not support chunked transfer encoding
+- Does not support persistent connections
+- Does not fully validate all HTTP headers
+- Loads an entire requested file into memory before sending it
+- Does not currently implement caching or range requests
+- Has not been hardened against every malformed or malicious request
+- Is not intended for production hosting
 
 
 
