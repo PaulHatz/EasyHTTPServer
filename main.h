@@ -53,6 +53,9 @@ using namespace std::literals::chrono_literals;
 #define HTML_ROOT_PATH L"\\html"
 #define SRV_PORT 80 
 
+namespace fs = std::filesystem;
+
+
 void HTTP_SocketThread(std::stop_token stop_tok, int *sockPtr);
 
 size_t getFileSize(FILE *FileHandle);

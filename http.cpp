@@ -75,33 +75,42 @@ size_t HTTP_SendHeader(SOCKET sock, int response_code, const char *ContentType, 
 
 void HTTP_ProcessRequest(SOCKET sock, char * buffer, size_t sz)
 {
-	auto headers = SplitHeaders(buffer);
+	auto headers = SplitHeaders(std::string_view(buffer, sz));
 	auto request = std::string_view(headers.at(0));
 
-	size_t firstSpace = request.find(' ');
+	auto firstSpace = request.find(' ');
 	if (firstSpace == std::string_view::npos)
     	return;
 
-	size_t secondSpace = request.find(' ', firstSpace + 1);
+	auto secondSpace = request.find(' ', firstSpace + 1);
 	if (secondSpace == std::string_view::npos)
     	return;
 
-	std::string_view method = request.substr(0, firstSpace);
+	auto method = request.substr(0, firstSpace);
 
-	std::string_view path =
+	auto path =
 		request.substr(firstSpace + 1,
 					secondSpace - firstSpace - 1);
 
-	std::string_view version =
+	auto version =
 		request.substr(secondSpace + 1);
 
-	auto requested_file = "html/" + std::string(path);
+	auto req_path = std::string(path);
 
-	if (path.at(path.length() - 1) == '/') {
-		requested_file += "index.html";
+	while (!req_path.empty() && (req_path.front() == '/' || req_path.front() == '\\'))
+	{
+		req_path.erase(req_path.begin());
 	}
 
-	if (std::filesystem::exists(requested_file)) {
+	fs::path root = fs::canonical("html");
+	fs::path requested_file = fs::weakly_canonical(root / req_path);
+
+	if (fs::exists(requested_file))
+	{
+		if (path.at(path.length() - 1) == '/') {
+			requested_file += "/index.html";
+		}
+
 		auto extension = getFileExtensionWithName(requested_file.c_str());
 		auto file_contents = readFile(requested_file);
 		auto fileSize =file_contents.length();
@@ -113,14 +122,12 @@ void HTTP_ProcessRequest(SOCKET sock, char * buffer, size_t sz)
 			char end[] = { 0x0D, 0x0A };
 			send(sock, file_contents.c_str(), fileSize, 0);
 			send(sock, end, 2, 0);
-			std::cout << "Hello noG" << std::endl;
-
 		} 
 	}
-	else { 
+	else {
 		HTTP_SendHeader(sock, 404, "text/html", 0);
-		std::cout << "Hello GGG" << std::endl;
-	}
+		std::cout << "Error 404: " << (requested_file) << std::endl;
+	} 
 }
 
 void HTTP_SocketThread(std::stop_token stop_tok, int *sockPtr)
