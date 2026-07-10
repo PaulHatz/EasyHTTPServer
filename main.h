@@ -56,7 +56,9 @@ using namespace std::literals::chrono_literals;
 namespace fs = std::filesystem;
 
 
-void HTTP_SocketThread(std::stop_token stop_tok, int *sockPtr);
+void HTTP_SocketThread(int sock);
 
 size_t getFileSize(FILE *FileHandle);
 std::string readFile(const std::filesystem::path& file_path);
+
+bool IsWithinRoot(const fs::path& root, const fs::path& requested);

@@ -63,8 +63,8 @@ int main()
 			if (newSocket) {
 				if (newSocket == SOCKET_ERROR)
 					continue;
-					
-				std::jthread socket_thread(HTTP_SocketThread, (int*)&newSocket);
+
+				std::jthread socket_thread(HTTP_SocketThread, newSocket);
 			}
 		}
 	}

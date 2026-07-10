@@ -27,3 +27,17 @@ std::string readFile(const std::filesystem::path& file_path)
     buffer << file_stream.rdbuf(); // Read the file buffer directly into the string stream
     return buffer.str();
 }
+
+bool IsWithinRoot(const fs::path& root, const fs::path& requested)
+{
+    auto rootIt = root.begin();
+    auto requestedIt = requested.begin();
+
+    for (; rootIt != root.end(); ++rootIt, ++requestedIt)
+    {
+        if (requestedIt == requested.end() || *rootIt != *requestedIt)
+            return false;
+    }
+
+    return true;
+}

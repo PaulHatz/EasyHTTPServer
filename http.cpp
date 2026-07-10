@@ -105,10 +105,12 @@ void HTTP_ProcessRequest(SOCKET sock, char * buffer, size_t sz)
 	fs::path root = fs::canonical("html");
 	fs::path requested_file = fs::weakly_canonical(root / req_path);
 
-	if (fs::exists(requested_file))
+
+
+	if (IsWithinRoot(root, requested_file) && fs::exists(requested_file))
 	{
-		if (path.at(path.length() - 1) == '/') {
-			requested_file += "/index.html";
+		if (fs::is_directory(requested_file)) {
+  			requested_file /= "index.html";
 		}
 
 		auto extension = getFileExtensionWithName(requested_file.c_str());
@@ -130,16 +132,18 @@ void HTTP_ProcessRequest(SOCKET sock, char * buffer, size_t sz)
 	} 
 }
 
-void HTTP_SocketThread(std::stop_token stop_tok, int *sockPtr)
+void HTTP_SocketThread(int sock)
 {
-	SOCKET sock = *sockPtr;
-
 	char *buffer = new char[512];
 
-	size_t sz = recv(sock, buffer, 512, 0);
+	ssize_t sz = recv(sock, buffer, 512, 0);
 
-	if (sz <= 512)
-		HTTP_ProcessRequest(sock, buffer, sz);
+	if (sz > 0 && sz <= 512)
+		HTTP_ProcessRequest(
+			sock, 
+			buffer, 
+			sz
+		);
 
 	std::this_thread::sleep_for(1ms);
 
