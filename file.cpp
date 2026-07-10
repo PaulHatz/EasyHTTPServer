@@ -17,7 +17,7 @@ size_t getFileSize(FILE *FileHandle)
 
 std::string readFile(const std::filesystem::path& file_path) 
 {
-    std::ifstream file_stream(file_path);
+    std::ifstream file_stream(file_path, std::ios::binary);
     
     if (!file_stream.is_open()) {
         throw std::runtime_error("Failed to open file: " + file_path.string());
